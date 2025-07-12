@@ -32,13 +32,6 @@ EOL;
 
         $jobs = new CronService();
 
-        // Run new shop related jobs
-        $jobs->processPendingOrder();
-        $jobs->processTabpOrderActivation();
-        $jobs->processBandwidthOrderActivation();
-        $jobs->processTimeOrderActivation();
-        $jobs->processTopupOrderActivation();
-
         // Run user related jobs
         $jobs->expirePaidUserAccount();
         $jobs->sendPaidUserUsageLimitNotification();
