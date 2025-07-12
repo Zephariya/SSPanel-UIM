@@ -1,12 +1,11 @@
 <?php
-
 declare(strict_types=1);
 
 namespace App\Models;
 
 use App\Services\IM;
 use App\Services\IM\Telegram;
-use App\Services\EmailQueue;
+use App\Services\Queue;
 use App\Utils\Tools;
 use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Database\Query\Builder;
@@ -17,6 +16,8 @@ use function round;
 use const PHP_EOL;
 
 /**
+ * 用户模型
+ * 定义用户相关属性和方法，包括流量统计、通知发送等功能
  * @property int    $id 用户ID
  * @property string $user_name 用户名
  * @property string $email E-Mail
@@ -64,14 +65,12 @@ use const PHP_EOL;
  * @property int    $is_dark_mode 是否启用暗黑模式
  * @property int    $is_inactive 是否处于闲置状态
  * @property string $locale 显示语言
- *
  * @mixin Builder
  */
 final class User extends Model
 {
     /**
-     * 已登录
-     *
+     * 已登录状态
      * @var bool
      */
     public bool $isLogin;
@@ -81,7 +80,6 @@ final class User extends Model
 
     /**
      * 强制类型转换
-     *
      * @var array
      */
     protected $casts = [
@@ -92,7 +90,8 @@ final class User extends Model
     ];
 
     /**
-     * DiceBear 头像
+     * 获取 DiceBear 头像 URL
+     * @return string 头像 URL
      */
     public function getDiceBearAttribute(): string
     {
@@ -100,7 +99,8 @@ final class User extends Model
     }
 
     /**
-     * User identifier
+     * 获取用户标识符
+     * @return string 用户唯一标识符
      */
     public function getIdentifierAttribute(): string
     {
@@ -108,7 +108,8 @@ final class User extends Model
     }
 
     /**
-     * 联系方式类型
+     * 获取联系方式类型名称
+     * @return string 联系方式类型（Slack、Discord 或 Telegram）
      */
     public function imType(): string
     {
@@ -120,7 +121,8 @@ final class User extends Model
     }
 
     /**
-     * 最后使用时间
+     * 获取最后使用时间
+     * @return string 格式化的最后使用时间
      */
     public function lastUseTime(): string
     {
@@ -128,47 +130,53 @@ final class User extends Model
     }
 
     /**
-     * 最后签到时间
+     * 获取最后签到时间
+     * @return string 格式化的最后签到时间
      */
     public function lastCheckInTime(): string
     {
         return $this->last_check_in_time === 0 ? '从未签到' : Tools::toDateTime($this->last_check_in_time);
     }
 
-    /*
-     * 总流量[自动单位]
+    /**
+     * 获取总流量（自动单位）
+     * @return string 格式化的总流量
      */
     public function enableTraffic(): string
     {
         return Tools::autoBytes($this->transfer_enable);
     }
 
-    /*
-     * 当期用量[自动单位]
+    /**
+     * 获取当前用量（自动单位）
+     * @return string 格式化的当前用量
      */
     public function usedTraffic(): string
     {
         return Tools::autoBytes($this->u + $this->d);
     }
 
-    /*
-     * 累计用量[自动单位]
+    /**
+     * 获取累计用量（自动单位）
+     * @return string 格式化的累计用量
      */
     public function totalTraffic(): string
     {
         return Tools::autoBytes($this->transfer_total);
     }
 
-    /*
-     * 剩余流量[自动单位]
+    /**
+     * 获取剩余流量（自动单位）
+     * @return string 格式化的剩余流量
      */
     public function unusedTraffic(): string
     {
         return Tools::autoBytes($this->transfer_enable - ($this->u + $this->d));
     }
 
-    /*
-     * 剩余流量占总流量的百分比
+    /**
+     * 获取剩余流量占总流量的百分比
+     * @return float 百分比值
      */
     public function unusedTrafficPercent(): float
     {
@@ -178,16 +186,18 @@ final class User extends Model
             round(($this->transfer_enable - ($this->u + $this->d)) / $this->transfer_enable, 2) * 100;
     }
 
-    /*
-     * 今天使用的流量[自动单位]
+    /**
+     * 获取今日使用的流量（自动单位）
+     * @return string 格式化的今日用量
      */
     public function todayUsedTraffic(): string
     {
         return Tools::autoBytes($this->transfer_today);
     }
 
-    /*
-     * 今天使用的流量占总流量的百分比
+    /**
+     * 获取今日使用的流量占总流量的百分比
+     * @return float 百分比值
      */
     public function todayUsedTrafficPercent(): float
     {
@@ -197,16 +207,18 @@ final class User extends Model
             round($this->transfer_today / $this->transfer_enable, 2) * 100;
     }
 
-    /*
-     * 今天之前已使用的流量[自动单位]
+    /**
+     * 获取今日之前已使用的流量（自动单位）
+     * @return string 格式化的历史用量
      */
     public function lastUsedTraffic(): string
     {
         return Tools::autoBytes($this->u + $this->d - $this->transfer_today);
     }
 
-    /*
-     * 今天之前已使用的流量占总流量的百分比
+    /**
+     * 获取今日之前已使用的流量占总流量的百分比
+     * @return float 百分比值
      */
     public function lastUsedTrafficPercent(): float
     {
@@ -216,8 +228,9 @@ final class User extends Model
             round(($this->u + $this->d - $this->transfer_today) / $this->transfer_enable, 2) * 100;
     }
 
-    /*
-     * 是否可以签到
+    /**
+     * 检查用户是否可以签到
+     * @return bool 是否允许签到
      */
     public function isAbleToCheckin(): bool
     {
@@ -241,12 +254,14 @@ final class User extends Model
     }
 
     /**
-     * 销户
+     * 销户，删除用户相关数据
+     * @return bool 是否删除成功
      */
     public function kill(): bool
     {
         $uid = $this->id;
 
+        // 删除用户相关的记录
         (new DetectBanLog())->where('user_id', $uid)->delete();
         (new DetectLog())->where('user_id', $uid)->delete();
         (new InviteCode())->where('user_id', $uid)->delete();
@@ -258,11 +273,17 @@ final class User extends Model
         return $this->delete();
     }
 
+    /**
+     * 解除用户的 IM 绑定
+     * @return bool 是否解除成功
+     * @throws TelegramSDKException
+     */
     public function unbindIM(): bool
     {
         $this->im_type = 0;
         $this->im_value = '';
 
+        // 如果是 Telegram 绑定且配置了踢出群组
         if ($this->im_type === 4 && Config::obtain('telegram_unbind_kick_member')) {
             try {
                 (new Telegram())->banGroupMember((int) $this->im_value);
@@ -276,33 +297,41 @@ final class User extends Model
 
     /**
      * 发送每日流量报告
-     *
-     * @param string $ann 公告
+     * @param string $ann 公告内容
+     * @throws GuzzleException
+     * @throws TelegramSDKException
      */
     public function sendDailyNotification(string $ann = ''): void
     {
+        // 获取流量信息
         $lastday_traffic = $this->todayUsedTraffic();
         $enable_traffic = $this->enableTraffic();
         $used_traffic = $this->usedTraffic();
         $unused_traffic = $this->unusedTraffic();
 
+        // 如果启用邮件通知
         if ($this->daily_mail_enable === 1) {
             echo 'Sending daily mail to user: ' . $this->id . PHP_EOL;
 
-            (new EmailQueue())->add(
-                $this->email,
-                $_ENV['appName'] . '-每日流量报告以及公告',
-                'traffic_report.tpl',
+            // 使用通用 Queue 类添加邮件任务
+            (new Queue('email_queue'))->add(
                 [
-                    'user' => $this,
-                    'text' => '站点公告:<br><br>' . $ann . '<br><br>晚安！',
-                    'lastday_traffic' => $lastday_traffic,
-                    'enable_traffic' => $enable_traffic,
-                    'used_traffic' => $used_traffic,
-                    'unused_traffic' => $unused_traffic,
-                ]
+                    'to_email' => $this->email,
+                    'subject' => $_ENV['appName'] . '-每日流量报告以及公告',
+                    'template' => 'traffic_report.tpl',
+                    'array' => json_encode([
+                        'user' => $this,
+                        'text' => '站点公告:<br><br>' . $ann . '<br><br>晚安！',
+                        'lastday_traffic' => $lastday_traffic,
+                        'enable_traffic' => $enable_traffic,
+                        'used_traffic' => $used_traffic,
+                        'unused_traffic' => $unused_traffic,
+                    ])
+                ],
+                'email'
             );
         } elseif ($this->daily_mail_enable === 2 && $this->im_value !== '') {
+            // 如果启用 IM 通知
             echo 'Sending daily IM message to user: ' . $this->id . PHP_EOL;
 
             $text = date('Y-m-d') . ' 流量使用报告' . PHP_EOL . PHP_EOL;
