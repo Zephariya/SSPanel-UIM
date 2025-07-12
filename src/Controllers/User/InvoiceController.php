@@ -9,6 +9,7 @@ use App\Models\Invoice;
 use App\Models\Paylist;
 use App\Models\UserMoneyLog;
 use App\Services\Payment;
+use App\Services\Queue;
 use App\Utils\Tools;
 use Exception;
 use Psr\Http\Message\ResponseInterface;
@@ -102,7 +103,6 @@ final class InvoiceController extends BaseController
             ]);
         }
 
-        // 账单是否为充值
         if ($invoice->type === 'topup') {
             return $response->withJson([
                 'ret' => 0,
@@ -110,7 +110,6 @@ final class InvoiceController extends BaseController
             ]);
         }
 
-        // 组合支付
         if ($user->money > 0) {
             $money_before = $user->money;
 
@@ -144,18 +143,27 @@ final class InvoiceController extends BaseController
             $invoice->update_time = time();
             $invoice->pay_time = time();
             $invoice->save();
+
+            if ($invoice->status === 'paid_balance' && $invoice->order_id) {
+                (new Queue('order_queue'))->add(
+                    [
+                        'order_id' => $invoice->order_id,
+                    ],
+                    'order'
+                );
+            }
+
+            if ($invoice->status === 'paid_balance') {
+                return $response->withHeader('HX-Redirect', '/user/invoice');
+            }
+
+            return $response->withHeader('HX-Refresh', 'true');
         } else {
             return $response->withJson([
                 'ret' => 0,
                 'msg' => '余额不足',
             ]);
         }
-
-        if ($invoice->status === 'paid_balance') {
-            return $response->withHeader('HX-Redirect', '/user/invoice');
-        }
-
-        return $response->withHeader('HX-Refresh', 'true');
     }
 
     public function ajax(ServerRequest $request, Response $response, array $args): ResponseInterface
