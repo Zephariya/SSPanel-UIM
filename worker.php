@@ -10,7 +10,6 @@ use App\Services\Boot;
 use App\Jobs\EmailJob;
 use App\Jobs\OrderJob;
 use App\Utils\Tools;
-use Predis\Client as Predis;
 use function Sentry\captureException;
 use function Sentry\captureMessage;
 
@@ -23,7 +22,7 @@ Boot::bootSentry();
 Boot::bootDb();
 
 /**
- * 统一输出日志（时间 + 信息）
+ * 日志输出
  */
 function logMessage(string $message): void
 {
@@ -31,47 +30,50 @@ function logMessage(string $message): void
 }
 
 /**
- * 初始化 Predis 连接
- * @return Predis
+ * 初始化 Redis 连接（ext-redis）
+ * @return Redis
  * @throws Throwable
  */
-function initRedisConnection(): Predis
+function initRedisConnection(): Redis
 {
+    $redis = new Redis();
+
     $host = $_ENV['redis_host'] ?? '127.0.0.1';
-    $port = $_ENV['redis_port'] ?? 6379;
-    $password = $_ENV['redis_password'] ?? null;
+    $port = (int) ($_ENV['redis_port'] ?? 6379);
+    $timeout = (float) ($_ENV['redis_connect_timeout'] ?? 2.0);
+    $useSsl = (bool) ($_ENV['redis_ssl'] ?? false);
+    $auth = $_ENV['redis_password'] ?? null;
     $username = $_ENV['redis_username'] ?? null;
-    $useSsl = $_ENV['redis_ssl'] ?? false;
 
-    $parameters = [
-        'scheme'  => $useSsl ? 'tls' : 'tcp',
-        'host'    => $host,
-        'port'    => $port,
-        'timeout' => $_ENV['redis_connect_timeout'] ?? 2.0,
-    ];
-
-    if ($username && $password) {
-        $parameters['username'] = $username;
-        $parameters['password'] = $password;
-    } elseif ($password) {
-        $parameters['password'] = $password;
+    if (!$redis->connect($host, $port, $timeout, null, 0, 0, ['ssl' => $useSsl])) {
+        throw new RuntimeException("Redis 连接失败");
     }
 
-    $client = new Predis($parameters);
-    $client->ping();
-    logMessage("Redis（Predis）连接成功（{$host}:{$port}）");
+    if ($username && $auth) {
+        if (!$redis->auth([$username, $auth])) {
+            throw new RuntimeException("Redis 身份验证失败");
+        }
+    } elseif ($auth) {
+        if (!$redis->auth($auth)) {
+            throw new RuntimeException("Redis 身份验证失败");
+        }
+    }
 
-    return $client;
+    $redis->setOption(Redis::OPT_READ_TIMEOUT, -1); // 防止 brPop 报错
+    $redis->ping();
+    logMessage("Redis（ext-redis）连接成功（{$host}:{$port}）");
+
+    return $redis;
 }
 
 /**
- * 处理单个任务
+ * 处理任务
  */
-function processTask(Predis $redis, string $key, string $queueName): void
+function processTask(Redis $redis, string $key, string $queueName): void
 {
     try {
         $dataJson = $redis->get($key);
-        if ($dataJson === null) {
+        if ($dataJson === false) {
             logMessage("任务数据缺失，跳过 Key：{$key}（队列：{$queueName}）");
             return;
         }
@@ -97,26 +99,26 @@ function processTask(Predis $redis, string $key, string $queueName): void
             case 'email':
                 EmailJob::handle($task);
                 logMessage("邮件任务处理成功：{$key}（队列：{$queueName}）");
-                $redis->del($key);
                 break;
 
             case 'order':
                 OrderJob::handle($task);
                 logMessage("订单任务处理成功：{$key}（队列：{$queueName}）");
-                $redis->del($key);
                 break;
 
             default:
                 logMessage("未知任务类型：{$task['type']}（队列：{$queueName}）");
-                $redis->del($key);
                 captureMessage("未知任务类型：Key={$key}, Type={$task['type']}, Queue={$queueName}");
         }
+
+        $redis->del($key); // 不论任务类型，都删除 key
+
     } catch (Throwable $ex) {
         logMessage("任务处理失败：{$key}（队列：{$queueName}）, 错误：" . $ex->getMessage());
         captureException($ex);
 
         try {
-            $redis->rpush($queueName, $key);
+            $redis->rPush($queueName, $key);
             logMessage("任务已重新入队：{$key}（队列：{$queueName}）");
         } catch (Throwable $re) {
             logMessage("任务重新入队失败：{$key}（队列：{$queueName}）, 错误：" . $re->getMessage());
@@ -127,7 +129,7 @@ function processTask(Predis $redis, string $key, string $queueName): void
     }
 }
 
-// 主循环启动
+// 启动消费者主循环
 try {
     $redis = initRedisConnection();
 } catch (Throwable $e) {
@@ -139,9 +141,9 @@ logMessage("队列消费者启动（队列：" . implode(', ', $queues) . "）")
 
 while (true) {
     try {
-        $result = $redis->brpop($queues, 30);
+        $result = $redis->brPop($queues, 30);
 
-        if ($result === null) {
+        if ($result === null || count($result) !== 2) {
             logMessage("无新任务，继续等待...");
             continue;
         }

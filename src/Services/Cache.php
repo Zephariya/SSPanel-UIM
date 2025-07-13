@@ -6,8 +6,17 @@ namespace App\Services;
 
 use Redis;
 
+/**
+ * Cache 服务类
+ * 提供 Redis 缓存的初始化和配置功能
+ */
 final class Cache
 {
+    /**
+     * 初始化 Redis 连接
+     *
+     * @return Redis
+     */
     public function initRedis(): Redis
     {
         $redis = new Redis();
@@ -31,20 +40,26 @@ final class Cache
 
         return $redis;
     }
+
+    /**
+     * 获取 Redis 配置
+     *
+     * @return array
+     */
     public static function getRedisConfig(): array
     {
         $config = [
             'host' => $_ENV['redis_host'] ?? 'localhost',
-            'port' => (int)($_ENV['redis_port'] ?? 6379),
-            'connectTimeout' => (float)($_ENV['redis_connect_timeout'] ?? 2.0),
-            'readTimeout' => (float)($_ENV['redis_read_timeout'] ?? 2.0),
+            'port' => (int) ($_ENV['redis_port'] ?? 6379),
+            'connectTimeout' => (float) ($_ENV['redis_connect_timeout'] ?? 2.0),
+            'readTimeout' => (float) ($_ENV['redis_read_timeout'] ?? 2.0),
         ];
 
-        if (!empty($_ENV['redis_username'])) {
+        if ($_ENV['redis_username'] !== null && $_ENV['redis_username'] !== '') {
             $config['auth']['user'] = $_ENV['redis_username'];
         }
 
-        if (!empty($_ENV['redis_password'])) {
+        if ($_ENV['redis_password'] !== null && $_ENV['redis_password'] !== '') {
             $config['auth']['pass'] = $_ENV['redis_password'];
         }
 
