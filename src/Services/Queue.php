@@ -1,24 +1,25 @@
 <?php
+
 declare(strict_types=1);
 
 namespace App\Services;
 
-use Redis;
 use function json_encode;
 use function time;
 
 /**
  * 通用队列处理类
  * 用于管理 Redis 队列的任务添加、弹出和删除
+ *
  * @property string $queueName 队列名称
  * @property int    $ttl       任务存活时间（秒）
  */
 final class Queue
 {
     // Redis 连接类型
-    protected $connection = 'redis';
+    private $connection = 'redis';
     // 默认队列名称
-    protected $queueName = 'default_queue';
+    private $queueName = 'default_queue';
     // Redis 客户端实例
     private $redis;
     // 任务默认存活时间（24小时）
@@ -26,6 +27,7 @@ final class Queue
 
     /**
      * 构造函数，初始化队列
+     *
      * @param string $queueName 队列名称
      */
     public function __construct(string $queueName = 'default_queue')
@@ -36,6 +38,7 @@ final class Queue
 
     /**
      * 添加任务到队列
+     *
      * @param array $data 任务数据
      * @param string $type 任务类型
      */
@@ -57,6 +60,7 @@ final class Queue
 
     /**
      * 获取队列长度
+     *
      * @return int 队列中的任务数量
      */
     public function count(): int
@@ -66,6 +70,7 @@ final class Queue
 
     /**
      * 非阻塞弹出任务
+     *
      * @return array|null 任务数据或 null
      */
     public function pop(): ?array
@@ -81,6 +86,7 @@ final class Queue
 
     /**
      * 阻塞弹出任务
+     *
      * @param int $timeout 超时时间（秒）
      * @return array|null 任务数据或 null
      */
@@ -100,6 +106,7 @@ final class Queue
 
     /**
      * 查询条件过滤（占位，依赖 TTL 自动清理）
+     *
      * @param mixed $column 列名
      * @param mixed $operator 操作符
      * @param mixed $value 值
@@ -116,7 +123,7 @@ final class Queue
     public function delete(): void
     {
         $keys = $this->redis->lRange($this->queueName, 0, -1);
-        if (!empty($keys)) {
+        if ($keys !== []) {
             $this->redis->del($keys);
         }
         $this->redis->del($this->queueName);
@@ -124,6 +131,7 @@ final class Queue
 
     /**
      * 生成唯一任务 ID
+     *
      * @return string 唯一 ID
      */
     private function generateUniqueId(): string
