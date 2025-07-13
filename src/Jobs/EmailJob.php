@@ -14,7 +14,6 @@ final class EmailJob
     /**
      * 处理邮件任务
      * @param array $task 任务数据
-     * @throws Exception 邮件发送异常
      */
     public static function handle(array $task): void
     {
@@ -34,7 +33,7 @@ final class EmailJob
             $email['to_email'],
             $email['subject'],
             $email['template'],
-            json_decode($email['array'], true)
+            isset($email['array']) ? json_decode($email['array'], true) : []
         );
     }
 }
