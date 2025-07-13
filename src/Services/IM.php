@@ -23,11 +23,6 @@ final class IM
             default => new Telegram(),
         };
     }
-
-    /**
-     * @throws GuzzleException
-     * @throws TelegramSDKException
-     */
     public static function send(int $to, string $msg, int $type): void
     {
         self::getClient($type)->send($to, $msg);

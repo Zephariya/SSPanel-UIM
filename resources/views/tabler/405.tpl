@@ -7,7 +7,7 @@
             <div class="empty-header">405</div>
             <p class="empty-title">不允许的请求方式</p>
             <p class="empty-subtitle text-secondary">
-                Wanna try something stupid I see, now go back to the home page.
+                Want to try something stupid I see, now go back to the home page.
             </p>
             <div class="empty-action">
                 <a href="/" class="btn btn-primary">

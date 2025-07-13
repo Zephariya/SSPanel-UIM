@@ -58,12 +58,6 @@ final class Mail
 
         return $smarty->fetch($template);
     }
-
-    /**
-     * @throws Exception
-     * @throws ClientExceptionInterface
-     * @throws TypeException
-     */
     public static function send($to, $subject, $template, $array = []): void
     {
         $body = self::genHtml($template, $array);

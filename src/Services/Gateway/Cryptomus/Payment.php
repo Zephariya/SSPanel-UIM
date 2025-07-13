@@ -25,39 +25,11 @@ final class Payment
     {
         return $this->requestBuilder->sendRequest($this->version . '/payment/services', $parameters);
     }
-
-    /**
-     * @param array $data
-     * - @var string amount: Amount to pay
-     * - @var string currency: Payment currency
-     * - @var string network: Payment network
-     * - @var string order_id: Order ID in your system
-     * - @var string url_return: Redirect link
-     * - @var string url_callback: Callback link
-     * - @var boolean is_payment_multiple: Allow surcharges on payment *
-     * - @var string lifetime: Payment lifetime in seconds
-     * - @var string to_currency: Currency to convert amount to
-     *
-     * @return bool|mixed
-     *
-     * @throws RequestBuilderException
-     */
     public function create(array $data)
     {
         return $this->requestBuilder->sendRequest($this->version . '/payment', $data);
     }
 
-    /**
-     * uuid or order_id
-     *
-     * @param array $data
-     * - @var string uuid
-     * - @var string order_id
-     *
-     * @return bool|mixed
-     *
-     * @throws RequestBuilderException
-     */
     public function info($data = [])
     {
         return $this->requestBuilder->sendRequest($this->version . '/payment/info', $data);
@@ -88,34 +60,11 @@ final class Payment
     {
         return $this->requestBuilder->sendRequest($this->version . '/balance', $parameters);
     }
-
-    /**
-     * uuid or order_id
-     *
-     * @param array $data
-     * - @var string uuid: Payment's UUID
-     * - @var string order_id: Order ID in your system
-     *
-     * @return bool|mixed
-     *
-     * @throws RequestBuilderException
-     */
     public function reSendNotifications(array $data)
     {
         return $this->requestBuilder->sendRequest($this->version . '/payment/resend', $data);
     }
 
-    /**
-     * @param array $data
-     * - @var string network: Network
-     * - @var string currency: Payment currency
-     * - @var string order_id: Order ID in your system
-     * - @var string url_callback: Callback url
-     *
-     * @return bool|mixed
-     *
-     * @throws RequestBuilderException
-     */
     public function createWallet(array $data)
     {
         return $this->requestBuilder->sendRequest($this->version . '/wallet', $data);

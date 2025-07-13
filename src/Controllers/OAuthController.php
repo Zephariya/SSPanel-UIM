@@ -29,12 +29,6 @@ use function time;
 final class OAuthController extends BaseController
 {
     private static string $err_msg = 'OAuth 请求失败';
-
-    /**
-     * @throws SmartyException
-     * @throws GuzzleException
-     * @throws RedisException
-     */
     public function index(ServerRequest $request, Response $response, array $args): ResponseInterface
     {
         return match ($args['type']) {

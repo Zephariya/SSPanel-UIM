@@ -140,9 +140,8 @@ final class AuthController extends BaseController
      * 显示注册页面
      * @param ServerRequest $request HTTP 请求
      * @param Response $response HTTP 响应
-     * @param array $args 路由参数
+     * @param $next
      * @return ResponseInterface
-     * @throws Exception
      */
     public function register(ServerRequest $request, Response $response, $next): ResponseInterface
     {
@@ -170,9 +169,8 @@ final class AuthController extends BaseController
      * 发送邮箱验证码
      * @param ServerRequest $request HTTP 请求
      * @param Response $response HTTP 响应
-     * @param array $args 路由参数
+     * @param $next
      * @return ResponseInterface
-     * @throws RedisException
      */
     public function sendVerify(ServerRequest $request, Response $response, $next): ResponseInterface
     {
@@ -277,7 +275,7 @@ final class AuthController extends BaseController
         $user->auto_reset_day = Config::obtain('free_user_reset_day');
         $user->auto_reset_bandwidth = Config::obtain('free_user_reset_bandwidth');
         $user->daily_mail_enable = $configs['reg_daily_report'];
-        $user->money = $money > 0 ? $money : 0;
+        $user->money = max($money, 0);
 
         // 处理邀请码
         $user->ref_by = 0;
@@ -402,14 +400,6 @@ final class AuthController extends BaseController
         // 调用注册辅助方法
         return $this->registerHelper($response, $name, $email, $password, $invite_code, $imtype, $imvalue, 0, 0);
     }
-
-    /**
-     * 处理登出请求
-     * @param ServerRequest $request HTTP 请求
-     * @param Response $response HTTP 响应
-     * @param array $args 路由参数
-     * @return Response
-     */
     public function logout(ServerRequest $request, Response $response, $next): Response
     {
         // 执行登出并重定向到登录页面
