@@ -44,18 +44,20 @@ final class Queue
      */
     public function add(array $data, string $type): void
     {
-        // 构造任务数据
-        $taskData = [
-            'id' => $this->generateUniqueId(),
-            'type' => $type,
-            'data' => $data,
-            'time' => time(),
-        ];
+        try {
+            $taskData = [
+                'id' => $this->generateUniqueId(),
+                'type' => $type,
+                'data' => $data,
+                'time' => time(),
+            ];
 
-        // 生成任务键并添加到队列
-        $key = $this->queueName . ':' . $taskData['id'];
-        $this->redis->rPush($this->queueName, $key);
-        $this->redis->setEx($key, $this->ttl, json_encode($taskData));
+            $key = $this->queueName . ':' . $taskData['id'];
+            $this->redis->rPush($this->queueName, $key);
+            $this->redis->setEx($key, $this->ttl, json_encode($taskData));
+        } catch (Throwable $e) {
+            throw new RuntimeException("添加任务失败: " . $e->getMessage());
+        }
     }
 
     /**
@@ -75,33 +77,67 @@ final class Queue
      */
     public function pop(): ?array
     {
-        $key = $this->redis->lPop($this->queueName);
-        if ($key === false) {
-            return null;
+        try {
+            $key = $this->redis->lPop($this->queueName);
+            if ($key === false) {
+                return null;
+            }
+            $data = $this->redis->get($key);
+            $this->redis->del($key);
+            if ($data === false) {
+                return null;
+            }
+            $decoded = json_decode($data, true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                throw new RuntimeException("JSON 解析错误: " . json_last_error_msg());
+            }
+            return $decoded;
+        } catch (Throwable $e) {
+            throw new RuntimeException("弹出任务失败: " . $e->getMessage());
         }
-        $data = $this->redis->get($key);
-        $this->redis->del($key);
-        return $data ? json_decode($data, true) : null;
     }
 
     /**
-     * 阻塞弹出任务
+     * 阻塞弹出任务（支持多队列）
+     *
+     * @param array $queues 队列名称数组
+     * @param int $timeout 超时时间（秒）
+     * @return array|null 包含队列名称和任务数据的数组，或 null
+     */
+    public function blockingPopMultiple(array $queues, int $timeout = 30): ?array
+    {
+        try {
+            $result = $this->redis->brPop($queues, $timeout);
+            if ($result === null || count($result) !== 2) {
+                return null;
+            }
+
+            [$queue, $key] = $result;
+            $data = $this->redis->get($key);
+            $this->redis->del($key);
+            if ($data === false) {
+                return null;
+            }
+            $decoded = json_decode($data, true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                throw new RuntimeException("JSON 解析错误: " . json_last_error_msg());
+            }
+            return ['queue' => $queue, 'task' => $decoded];
+        } catch (Throwable $e) {
+            throw new RuntimeException("阻塞弹出任务失败: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * 阻塞弹出任务（单队列，兼容旧方法）
      *
      * @param int $timeout 超时时间（秒）
      * @return array|null 任务数据或 null
      */
     public function blockingPop(int $timeout = 30): ?array
     {
-        $result = $this->redis->brPop([$this->queueName], $timeout);
-
-        if ($result === null || count($result) !== 2) {
-            return null;
-        }
-
-        [$queue, $key] = $result;
-        $data = $this->redis->get($key);
-        $this->redis->del($key);
-        return $data ? json_decode($data, true) : null;
+        $result = $this->blockingPopMultiple([$this->queueName], $timeout);
+        return $result ? $result['task'] : null;
     }
 
     /**
@@ -122,11 +158,15 @@ final class Queue
      */
     public function delete(): void
     {
-        $keys = $this->redis->lRange($this->queueName, 0, -1);
-        if ($keys !== []) {
-            $this->redis->del($keys);
+        try {
+            $keys = $this->redis->lRange($this->queueName, 0, -1);
+            if ($keys !== []) {
+                $this->redis->del($keys);
+            }
+            $this->redis->del($this->queueName);
+        } catch (Throwable $e) {
+            throw new RuntimeException("删除队列失败: " . $e->getMessage());
         }
-        $this->redis->del($this->queueName);
     }
 
     /**
@@ -136,6 +176,6 @@ final class Queue
      */
     private function generateUniqueId(): string
     {
-        return uniqid('task_', true);
+        return md5(uniqid('task_', true) . microtime(true));
     }
 }
